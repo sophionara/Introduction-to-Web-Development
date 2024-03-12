@@ -1,10 +1,10 @@
 // to execute JavaScript code that relies on DOM elements being available without blocking the initial page load.
-if (document.readyState == 'loading'){
+if (document.readyState == 'loading') {
     document.addEventListener('DOMContentLoaded', ready)
-}else {
+} else {
     ready()
 }
-function ready(){
+function ready() {
     // select all REMOVE BUTTONS and activate removeCartItem function on them
     var removeCartItemButtons = document.getElementsByClassName('btn-danger')
     for (var i = 0; i < removeCartItemButtons.length; i++) {
@@ -13,7 +13,7 @@ function ready(){
     }
     //  to attach event listeners to quantity input fields in a shopping cart. 
     var quantityInputs = document.getElementsByClassName('cart-quantity-input')
-    for (var i = 0; i < quantityInputs.length; i++){
+    for (var i = 0; i < quantityInputs.length; i++) {
         var input = quantityInputs[i]
         input.addEventListener('change', quantityChanged)
     }
@@ -25,16 +25,58 @@ function ready(){
     }
     // PURCHASE BUTTON
     document.getElementsByClassName('btn-purchase')[0].addEventListener('click', purchaseClicked)
-   
+
 }
-function purchaseClicked(){
-    alert("Thank you for your purchase! <3")
-    var cartItems = document.getElementsByClassName("cart-items")[0]
-    while(cartItems.hasChildNodes()){
-        cartItems.removeChild(cartItems.firstChild)
+var stripeHandler = StripeCheckout.configure({
+    key: stripePublicKey,
+    locale: 'en',
+    token: function (token) {
+        var items = []
+        var cartItemsContainer = document.getElementsByClassName("cart-items")[0]
+        var cartRows = cartItemsContainer.getElementsByClassName('cart-row')
+        for (var i = 0; i < cartRows.length; i++) {
+            var cartRow = cartRows[i]
+            var quantityElement = cartRow.getElementsByClassName('cart-quantity-input')[0]
+            var quantity = quantityElement.value
+            var id = cartRow.dataset.itemId
+            items.push({
+                id: id,
+                quantity: quantity
+            })
+        }
+        fetch('/purchase', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'accept': 'application/json'
+            },
+            body: JSON.stringify({
+                stripeTokenId: token.id,
+                items: items
+            })   
+        }).then(function(res){
+            return res.json()
+        }).then(function(data){
+            alert(data.message)
+            var cartItems = document.getElementsByClassName('cart-items')[0]
+            while(cartItems.hasChildNodes()) {
+                cartItems.removeChild(cartItems.firstChild)
+            }
+            updateCartTotal()
+        }).catch(function(error){
+            console.error(error)
+        })
     }
-    updateCartTotal()
-    
+})
+
+
+function purchaseClicked() {
+    var priceElement = document.getElementsByClassName('cart-total-price')[0]
+    var price = parseFloat(priceElement.innerText.replace('$', '')) * 100;
+    stripeHandler.open({
+        amount: price
+    })
+
 }
 
 function removeCartItem(event) {
@@ -43,11 +85,11 @@ function removeCartItem(event) {
     buttonClicked.parentElement.parentElement.remove()
     updateCartTotal()
 }
-function quantityChanged(event){
+function quantityChanged(event) {
     // This line retrieves the element that triggered the event. 
     var input = event.target
     // if the value entered into the input field is not a number or if it's less than or equal to zero. 
-    if(isNaN(input.value) || input.value <=0) {
+    if (isNaN(input.value) || input.value <= 0) {
         // This ensures that the quantity is always a positive integer.
         input.value = 1
     }
@@ -62,14 +104,16 @@ function addToCartClicked(event) {
     var title = shopItem.getElementsByClassName('shop-item-title')[0].innerText
     var price = shopItem.getElementsByClassName('shop-item-price')[0].innerText
     var imageSrc = shopItem.getElementsByClassName('shop-item-image')[0].src
-    addItemToCart(title, price, imageSrc)
+    var id = shopItem.dataset.itemId
+    addItemToCart(title, price, imageSrc, id)
     updateCartTotal()
 }
 // creates a new row in the shopping cart with details of the item (title, price, image), adds it to the cart if it's not already there, and sets up event listeners for the remove button and quantity input field.
-function addItemToCart(title, price, imageSrc) {
+function addItemToCart(title, price, imageSrc, id) {
     var cartRow = document.createElement('div')
     // It adds the class 'cart-row' to the newly created cartRow element.
     cartRow.classList.add('cart-row')
+    cartRow.dataset.itemId = id
     var cartItems = document.getElementsByClassName('cart-items')[0]
     var cartItemNames = cartItems.getElementsByClassName('cart-item-title')
     for (var i = 0; i < cartItemNames.length; i++) {
@@ -92,7 +136,7 @@ function addItemToCart(title, price, imageSrc) {
     cartItems.append(cartRow)
     cartRow.getElementsByClassName('btn-danger')[0].addEventListener('click', removeCartItem)
     cartRow.getElementsByClassName('cart-quantity-input')[0].addEventListener('click', quantityChanged)
-    
+
 }
 function updateCartTotal() {
     var cartItemContainer = document.getElementsByClassName('cart-items')[0]
